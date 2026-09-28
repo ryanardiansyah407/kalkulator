@@ -206,13 +206,14 @@
 
     <div class="field">
       <label for="nama">Nama Produk</label>
-      <div class="amount-row"><input id="nama" type="text" placeholder="cth. Tempe Ungkep"></div>
+      <div class="amount-row"><input id="nama" type="text" list="resepList" autocomplete="off" placeholder="Ketik manual atau pilih dari resep HPP"></div>
+      <datalist id="resepList"></datalist>
     </div>
     <div class="field">
       <label for="hpp">HPP Awal (per produk)</label>
       <div class="amount-row"><span class="prefix">Rp</span><input id="hpp" type="text" inputmode="decimal" placeholder="0" autocomplete="off"></div>
       <button id="goHppBtn" type="button" class="add-fee-btn">🧮 Hitung dari bahan →</button>
-      <div class="hpp-linked" id="hppLinkNote" style="display:none;"><span>Terhubung ke tab Hitung HPP</span><button type="button" id="unlinkHppBtn">Lepas</button></div>
+      <div class="hpp-linked" id="hppLinkNote" style="display:none;"><span id="hppLinkText">Terhubung ke tab Hitung HPP</span><button type="button" id="unlinkHppBtn">Lepas</button></div>
     </div>
     <div class="field">
       <label for="harga">Rencana Harga Jual</label>
@@ -567,6 +568,8 @@
   let hppAuto = false;
   let lastHppPerUnit = 0;
   let lastHppTotal = 0;
+  let linkedResep = null;   // {id, nama, hpp} kalau nama produk dipilih dari resep HPP tersimpan
+  let resepCache = [];
   function seedHppRows(list){ hppRows = list.map(r => ({ id: nextId++, cat:'Bahan Pokok', name:'', qty:1, unit:'', price:'', ...r })); }
   seedHppRows([{}]);
 
@@ -640,8 +643,10 @@
   }
 
   function applyHppMode(){
-    $('hpp').readOnly = hppAuto;
-    $('hppLinkNote').style.display = hppAuto ? 'flex' : 'none';
+    if (linkedResep) $('hpp').value = fmtNum(linkedResep.hpp);
+    $('hpp').readOnly = hppAuto || !!linkedResep;
+    $('hppLinkNote').style.display = (hppAuto || linkedResep) ? 'flex' : 'none';
+    $('hppLinkText').textContent = linkedResep ? 'HPP diambil dari resep "' + linkedResep.nama + '"' : 'Terhubung ke tab Hitung HPP';
     $('goHppBtn').textContent = hppAuto ? '🧮 Edit rincian HPP →' : '🧮 Hitung dari bahan →';
     updateHpp();
   }
@@ -657,10 +662,10 @@
   $('tabBtnProfit').addEventListener('click', () => showTab('profit'));
   $('tabBtnHpp').addEventListener('click', () => showTab('hpp'));
   $('goHppBtn').addEventListener('click', () => showTab('hpp'));
-  $('unlinkHppBtn').addEventListener('click', () => { hppAuto = false; applyHppMode(); });
+  $('unlinkHppBtn').addEventListener('click', () => { hppAuto = false; linkedResep = null; applyHppMode(); });
   $('useHppBtn').addEventListener('click', () => {
     if (!(lastHppPerUnit > 0)) return toast('Isi komponen dan harganya dulu.', true);
-    hppAuto = true; applyHppMode(); showTab('profit');
+    linkedResep = null; hppAuto = true; applyHppMode(); showTab('profit');
     toast('HPP per produk dipakai di kalkulator profit.');
   });
   $('yieldQty').addEventListener('input', updateHpp);
@@ -837,6 +842,7 @@
       const dh = d.rincian_hpp;
       if (dh && Array.isArray(dh.rows)) { seedHppRows(dh.rows); $('yieldQty').value = dh.hasil_produksi || 1; hppAuto = true; }
       else { seedHppRows([{}]); $('yieldQty').value = 1; hppAuto = false; }
+      linkedResep = null;
       renderHppRows(); applyHppMode();
       $('namaResep').value = ''; setEditingHpp(null);
       activePreset = d.marketplace || null;
@@ -871,6 +877,7 @@
       { name:'Biaya Promosi', type:'percent', value:1.11 }
     ]);
     seedHppRows([{}]); $('yieldQty').value = 1; hppAuto = false;
+    linkedResep = null;
     renderHppRows(); applyHppMode();
     $('namaResep').value = ''; setEditingHpp(null);
     clearPresetActive();
@@ -882,6 +889,40 @@
   // RESEP HPP TERSIMPAN (tabel hpp_resep)
   // =========================================================
   let editingHppId = null;
+
+  async function loadResepOptions(){
+    if (!DB_READY) return;
+    try {
+      const rows = await sb('hpp_resep?select=id,nama_resep,hpp_per_produk&order=updated_at.desc&limit=500');
+      resepCache = rows || [];
+      const dl = $('resepList');
+      dl.innerHTML = '';
+      const seen = new Set();
+      resepCache.forEach(r => {
+        const key = (r.nama_resep || '').trim().toLowerCase();
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        dl.appendChild(mk('option', '', { value: r.nama_resep, label: 'HPP ' + fmtRp(r.hpp_per_produk) }));
+      });
+      syncNamaResep();
+    } catch (e) { /* tabel belum ada: nama produk tetap bisa diketik manual */ }
+  }
+
+  function syncNamaResep(){
+    const v = $('nama').value.trim().toLowerCase();
+    const hit = v ? resepCache.find(r => (r.nama_resep || '').trim().toLowerCase() === v) : null;
+    if (hit) {
+      if (!linkedResep || linkedResep.id !== hit.id) {
+        linkedResep = { id: hit.id, nama: hit.nama_resep, hpp: Number(hit.hpp_per_produk) };
+        hppAuto = false;
+        applyHppMode();
+      }
+    } else if (linkedResep) {
+      linkedResep = null;
+      applyHppMode();
+    }
+  }
+  $('nama').addEventListener('input', syncNamaResep);
 
   function setEditingHpp(id, nama){
     editingHppId = id;
@@ -927,7 +968,7 @@
         setEditingHpp(res && res[0] ? res[0].id : null, body.nama_resep);
         toast('Resep "' + body.nama_resep + '" disimpan.');
       }
-      loadHppList();
+      loadHppList(); loadResepOptions();
     } catch (e) {
       toast(hppDbError(e, 'Gagal menyimpan.'), true);
     } finally {
@@ -1003,7 +1044,7 @@
       await sb('hpp_resep?id=eq.' + it.id, { method:'DELETE' });
       if (editingHppId === it.id) setEditingHpp(null);
       toast('Resep dihapus.');
-      loadHppList();
+      loadHppList(); loadResepOptions();
     } catch (e) {
       toast(hppDbError(e, 'Gagal menghapus.'), true);
     }
@@ -1043,6 +1084,7 @@
   calc();
   loadList();
   loadHppList();
+  loadResepOptions();
 </script>
 
 </body>
