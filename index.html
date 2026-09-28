@@ -454,8 +454,8 @@
   // (Supabase → Project Settings → API). Tabelnya dibuat dengan
   // hpp_kalkulasi.sql.
   // =========================================================
-  const SUPABASE_URL = 'ISI_SUPABASE_URL';        // mis. https://abcdxyz.supabase.co
-  const SUPABASE_ANON_KEY = 'ISI_ANON_KEY';       // anon / publishable key
+  const SUPABASE_URL = 'https://tgyrrnzbmfaezlqvrdht.supabase.co';        // mis. https://abcdxyz.supabase.co
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRneXJybnpibWZhZXpscXZyZGh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1NjYwMzAsImV4cCI6MjEwNjE0MjAzMH0.LNcwM0NTAFmKoxBwSQF8zk1VU9kD3GWafkYbvxLn-T0';       // anon / publishable key
   const DB_READY = /^https:\/\/.+/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.indexOf('ISI_') !== 0 && SUPABASE_ANON_KEY.length > 20;
 
   async function sb(path, opts){
