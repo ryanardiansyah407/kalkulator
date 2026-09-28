@@ -72,6 +72,7 @@
   .fee-row{ display:flex; align-items:center; gap:7px; background:var(--paper-soft); border:1.5px solid var(--line); border-radius:12px; padding:8px 10px; }
   .fee-row input[type=checkbox]{ width:16px; height:16px; flex:0 0 auto; accent-color:var(--green); cursor:pointer; }
   .fee-name{ flex:1 1 auto; min-width:0; font-family:var(--sans); font-size:12.5px; font-weight:500; }
+  .fee-value.rp{ width:74px; }
   .fee-value{ width:52px; flex:0 0 auto; font-family:var(--mono); font-size:13px; text-align:right; }
   .fee-unit{ flex:0 0 auto; font-family:var(--mono); font-size:11px; font-weight:700; color:var(--brown); background:var(--clay-soft); border:none; border-radius:7px; padding:5px 8px; cursor:pointer; }
   .fee-remove{ flex:0 0 auto; font-family:var(--sans); font-size:14px; color:var(--ink-faint); background:none; border:none; cursor:pointer; padding:0 2px; line-height:1; }
@@ -206,13 +207,13 @@
     </div>
     <div class="field">
       <label for="hpp">HPP Awal (per produk)</label>
-      <div class="amount-row"><span class="prefix">Rp</span><input id="hpp" type="number" inputmode="decimal" placeholder="0" min="0"></div>
+      <div class="amount-row"><span class="prefix">Rp</span><input id="hpp" type="text" inputmode="decimal" placeholder="0" autocomplete="off"></div>
       <button id="goHppBtn" type="button" class="add-fee-btn">🧮 Hitung dari bahan →</button>
       <div class="hpp-linked" id="hppLinkNote" style="display:none;"><span>Terhubung ke tab Hitung HPP</span><button type="button" id="unlinkHppBtn">Lepas</button></div>
     </div>
     <div class="field">
       <label for="harga">Rencana Harga Jual</label>
-      <div class="amount-row"><span class="prefix">Rp</span><input id="harga" type="number" inputmode="decimal" placeholder="0" min="0"></div>
+      <div class="amount-row"><span class="prefix">Rp</span><input id="harga" type="text" inputmode="decimal" placeholder="0" autocomplete="off"></div>
     </div>
 
     <div class="field">
@@ -292,6 +293,31 @@
   const fmtRp = n => 'Rp ' + Math.round(n).toLocaleString('id-ID');
   const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 
+  // Input rupiah: tampil 1.250.000 (titik ribuan, koma desimal), dibaca balik jadi angka
+  const parseRp = v => { const n = parseFloat(String(v).replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+  const fmtNum = n => {
+    n = Math.round(num(n) * 100) / 100;
+    if (!(n > 0)) return '';
+    const parts = String(n).split('.');
+    return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (parts[1] ? ',' + parts[1] : '');
+  };
+  function fmtInput(el){
+    const raw = el.value;
+    const caret = el.selectionStart == null ? raw.length : el.selectionStart;
+    const before = raw.slice(0, caret).replace(/[^\d,]/g, '').length;
+    const clean = raw.replace(/[^\d,]/g, '');
+    const ci = clean.indexOf(',');
+    let intp = ci < 0 ? clean : clean.slice(0, ci);
+    const dec = ci < 0 ? null : clean.slice(ci + 1).replace(/,/g, '').slice(0, 2);
+    intp = intp.replace(/^0+(?=\d)/, '');
+    if (intp === '' && dec !== null) intp = '0';
+    const out = intp.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + (dec !== null ? ',' + dec : '');
+    el.value = out;
+    let pos = 0, c = 0;
+    while (pos < out.length && c < before) { if (/[\d,]/.test(out[pos])) c++; pos++; }
+    try { el.setSelectionRange(pos, pos); } catch (e) {}
+  }
+
   let nextId = 1;
   let feeRows = [];
   let activePreset = null;   // label preset yang sedang aktif (null = manual)
@@ -318,7 +344,9 @@
       div.innerHTML =
         '<input type="checkbox" class="fee-check" data-id="' + row.id + '" ' + (row.enabled ? 'checked' : '') + '>' +
         '<input type="text" class="fee-name" data-id="' + row.id + '" value="' + row.name.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') + '">' +
-        '<input type="number" class="fee-value" data-id="' + row.id + '" value="' + row.value + '" step="0.01" min="0">' +
+        (row.type === 'flat'
+          ? '<input type="text" inputmode="decimal" autocomplete="off" placeholder="0" class="fee-value rp" data-id="' + row.id + '" value="' + fmtNum(row.value) + '">'
+          : '<input type="number" class="fee-value" data-id="' + row.id + '" value="' + row.value + '" step="0.01" min="0">') +
         '<button type="button" class="fee-unit" data-id="' + row.id + '">' + (row.type === 'percent' ? '%' : 'Rp') + '</button>' +
         '<span class="fee-computed" data-computed="' + row.id + '">Rp 0</span>' +
         '<button type="button" class="fee-remove" data-id="' + row.id + '">&times;</button>';
@@ -340,7 +368,9 @@
     }));
     document.querySelectorAll('.fee-value').forEach(el => el.addEventListener('input', e => {
       const id = +e.target.dataset.id;
-      feeRows.find(r => r.id === id).value = num(e.target.value);
+      const row = feeRows.find(r => r.id === id);
+      if (row.type === 'flat') { fmtInput(e.target); row.value = parseRp(e.target.value); }
+      else row.value = num(e.target.value);
       clearPresetActive(); calc();
     }));
     document.querySelectorAll('.fee-unit').forEach(el => el.addEventListener('click', e => {
@@ -461,8 +491,8 @@
   }
 
   function calc(){
-    const hpp = num($('hpp').value);
-    const harga = num($('harga').value);
+    const hpp = parseRp($('hpp').value);
+    const harga = parseRp($('harga').value);
 
     let biayaAdmin = 0;
     feeRows.forEach(row => {
@@ -502,7 +532,7 @@
     renderChart(hpp, biayaAdmin, netProfit, harga);
   }
 
-  ['hpp','harga'].forEach(id => $(id).addEventListener('input', calc));
+  ['hpp','harga'].forEach(id => $(id).addEventListener('input', e => { fmtInput(e.target); calc(); }));
 
   // =========================================================
   // RINCIAN HPP (bahan pokok, pendukung, kemasan, tenaga kerja, dll.)
@@ -535,8 +565,8 @@
       const l2 = mk('div', 'hpp-line');
       const qty = mk('input', 'hpp-qty', { type:'number', placeholder:'Jml', min:0, step:'any', value:row.qty });
       qty.addEventListener('input', () => { row.qty = qty.value; updateHpp(); });
-      const price = mk('input', 'hpp-price', { type:'number', placeholder:'Harga satuan (Rp)', min:0, step:'any', value:row.price });
-      price.addEventListener('input', () => { row.price = price.value; updateHpp(); });
+      const price = mk('input', 'hpp-price', { type:'text', inputMode:'decimal', autocomplete:'off', placeholder:'Harga satuan (Rp)', value:fmtNum(row.price) });
+      price.addEventListener('input', () => { fmtInput(price); row.price = parseRp(price.value); updateHpp(); });
       const sub = mk('span', 'hpp-sub', { textContent:'Rp 0' });
       sub.dataset.sub = row.id;
       l2.append(qty, mk('span', 'hpp-x', { textContent:'×' }), price, mk('span', 'hpp-x', { textContent:'=' }), sub);
@@ -572,7 +602,7 @@
       }
     });
 
-    if (hppAuto) $('hpp').value = perUnit > 0 ? Math.round(perUnit * 100) / 100 : '';
+    if (hppAuto) $('hpp').value = fmtNum(perUnit);
     calc();
   }
 
@@ -768,8 +798,8 @@
       const d = res && res[0];
       if (!d) { toast('Data tidak ditemukan (mungkin sudah dihapus).', true); loadList(); return; }
       $('nama').value = d.nama_produk || '';
-      $('hpp').value = d.hpp;
-      $('harga').value = d.harga_jual;
+      $('hpp').value = fmtNum(d.hpp);
+      $('harga').value = fmtNum(d.harga_jual);
       seedRows(Array.isArray(d.rincian_biaya) ? d.rincian_biaya : []);
       const dh = d.rincian_hpp;
       if (dh && Array.isArray(dh.rows)) { seedHppRows(dh.rows); $('yieldQty').value = dh.hasil_produksi || 1; hppAuto = true; }
