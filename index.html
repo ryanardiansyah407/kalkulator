@@ -163,6 +163,8 @@
   .hpp-name{ flex:1 1 auto; min-width:0; font-family:var(--sans); font-size:12.5px; font-weight:500; }
   .hpp-qty{ width:62px; flex:0 0 auto; font-size:13px; text-align:right; }
   .hpp-price{ flex:1 1 auto; min-width:0; font-size:13px; text-align:right; }
+  .hpp-unit{ flex:0 0 auto; font-family:var(--sans); font-size:11.5px; font-weight:600; color:var(--brown); background:var(--clay-soft); border:none; border-radius:7px; padding:6px 5px; cursor:pointer; }
+  .hpp-line.total{ justify-content:space-between; font-family:var(--sans); font-size:11px; color:var(--ink-faint); font-weight:600; }
   .hpp-x{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); }
   .hpp-sub{ flex:0 0 auto; min-width:78px; font-family:var(--mono); font-size:11.5px; color:var(--ink); font-weight:600; text-align:right; }
   .hpp-panel .calc-line{ font-size:12px; }
@@ -291,7 +293,7 @@
         <button type="button" class="btn btn-soft" id="saveHppNewBtn" style="display:none;">Simpan sebagai versi baru</button>
         <button type="button" class="btn btn-ghost" id="resetHppBtn">Reset</button>
       </div>
-      <p class="preset-note">Isi jumlah pakai × harga satuan tiap komponen. Total dibagi hasil produksi = HPP per produk. Tulis satuan di nama komponen, mis. "Kedelai (kg)". Kalau harga bahan naik, buka resep lalu ubah harganya. Pakai "Simpan sebagai versi baru" kalau data harga lama mau tetap disimpan.</p>
+      <p class="preset-note">Isi jumlah pakai × harga satuan tiap komponen. Total dibagi hasil produksi = HPP per produk. Beli per kg tapi pakai per gram? Pilih satuan "gram", lalu isi harga per kg. Kalau harga bahan naik, buka resep lalu ubah harganya. Pakai "Simpan sebagai versi baru" kalau data harga lama mau tetap disimpan.</p>
     </div>
 
     <div class="card savedcard">
@@ -557,11 +559,15 @@
   // RINCIAN HPP (bahan pokok, pendukung, kemasan, tenaga kerja, dll.)
   // =========================================================
   const HPP_CATS = ['Bahan Pokok','Bahan Pendukung','Kemasan','Tenaga Kerja','Overhead','Lainnya'];
+  // satuan pakai -> pengali terhadap satuan harga (harga per kg / per liter / per satuan)
+  const HPP_UNITS = [['', 'pcs/lain'], ['kg', 'kg'], ['g', 'gram'], ['l', 'liter'], ['ml', 'ml']];
+  const HPP_UNIT_F = { '': 1, kg: 1, g: 0.001, l: 1, ml: 0.001 };
+  const priceHint = u => (u === 'kg' || u === 'g') ? 'Harga per kg' : (u === 'l' || u === 'ml') ? 'Harga per liter' : 'Harga satuan (Rp)';
   let hppRows = [];
   let hppAuto = false;
   let lastHppPerUnit = 0;
   let lastHppTotal = 0;
-  function seedHppRows(list){ hppRows = list.map(r => ({ id: nextId++, cat:'Bahan Pokok', name:'', qty:1, price:'', ...r })); }
+  function seedHppRows(list){ hppRows = list.map(r => ({ id: nextId++, cat:'Bahan Pokok', name:'', qty:1, unit:'', price:'', ...r })); }
   seedHppRows([{}]);
 
   function mk(tag, cls, props){ const el = document.createElement(tag); if (cls) el.className = cls; return Object.assign(el, props || {}); }
@@ -585,13 +591,19 @@
       const l2 = mk('div', 'hpp-line');
       const qty = mk('input', 'hpp-qty', { type:'number', placeholder:'Jml', min:0, step:'any', value:row.qty });
       qty.addEventListener('input', () => { row.qty = qty.value; updateHpp(); });
-      const price = mk('input', 'hpp-price', { type:'text', inputMode:'decimal', autocomplete:'off', placeholder:'Harga satuan (Rp)', value:fmtNum(row.price) });
+      const unit = mk('select', 'hpp-unit');
+      HPP_UNITS.forEach(u => unit.appendChild(mk('option', '', { value:u[0], textContent:u[1], selected:u[0] === (row.unit || '') })));
+      const price = mk('input', 'hpp-price', { type:'text', inputMode:'decimal', autocomplete:'off', placeholder:priceHint(row.unit), value:fmtNum(row.price) });
+      unit.addEventListener('change', () => { row.unit = unit.value; price.placeholder = priceHint(row.unit); updateHpp(); });
       price.addEventListener('input', () => { fmtInput(price); row.price = parseRp(price.value); updateHpp(); });
+      l2.append(qty, unit, mk('span', 'hpp-x', { textContent:'×' }), price);
+
+      const l3 = mk('div', 'hpp-line total');
       const sub = mk('span', 'hpp-sub', { textContent:'Rp 0' });
       sub.dataset.sub = row.id;
-      l2.append(qty, mk('span', 'hpp-x', { textContent:'×' }), price, mk('span', 'hpp-x', { textContent:'=' }), sub);
+      l3.append(mk('span', '', { textContent:'Subtotal' }), sub);
 
-      wrap.append(l1, l2);
+      wrap.append(l1, l2, l3);
       box.appendChild(wrap);
     });
   }
@@ -600,7 +612,7 @@
     let total = 0;
     const byCat = {};
     hppRows.forEach(r => {
-      const s = num(r.qty) * num(r.price);
+      const s = num(r.qty) * (HPP_UNIT_F[r.unit || ''] || 1) * num(r.price);
       total += s;
       byCat[r.cat] = (byCat[r.cat] || 0) + s;
       const el = document.querySelector('[data-sub="' + r.id + '"]');
@@ -652,7 +664,7 @@
     toast('HPP per produk dipakai di kalkulator profit.');
   });
   $('yieldQty').addEventListener('input', updateHpp);
-  $('addHppBtn').addEventListener('click', () => { hppRows.push({ id: nextId++, cat:'Bahan Pokok', name:'', qty:1, price:'' }); renderHppRows(); updateHpp(); });
+  $('addHppBtn').addEventListener('click', () => { hppRows.push({ id: nextId++, cat:'Bahan Pokok', name:'', qty:1, unit:'', price:'' }); renderHppRows(); updateHpp(); });
 
   // =========================================================
   // SIMPAN KE DATABASE (Supabase REST / PostgREST)
@@ -714,7 +726,7 @@
       rincian_biaya: feeRows.map(r => ({ name: r.name, type: r.type, value: num(r.value), enabled: r.enabled })),
       rincian_hpp: hppAuto ? {
         hasil_produksi: num($('yieldQty').value) > 0 ? num($('yieldQty').value) : 1,
-        rows: hppRows.map(r => ({ cat: r.cat, name: r.name, qty: num(r.qty), price: num(r.price) }))
+        rows: hppRows.map(r => ({ cat: r.cat, name: r.name, qty: num(r.qty), unit: r.unit || '', price: num(r.price) }))
       } : null,
       total_biaya_layanan: r2(c.biayaAdmin),
       total_biaya: r2(c.totalBiaya),
@@ -888,7 +900,7 @@
     return {
       nama_resep: $('namaResep').value.trim(),
       hasil_produksi: y > 0 ? y : 1,
-      rincian: hppRows.map(r => ({ cat: r.cat, name: r.name, qty: num(r.qty), price: num(r.price) })),
+      rincian: hppRows.map(r => ({ cat: r.cat, name: r.name, qty: num(r.qty), unit: r.unit || '', price: num(r.price) })),
       total_biaya: r2(lastHppTotal),
       hpp_per_produk: r2(lastHppPerUnit)
     };
