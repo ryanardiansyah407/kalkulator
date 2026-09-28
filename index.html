@@ -184,14 +184,8 @@
       <p class="preset-note">Preset mengisi rincian umum per marketplace. Centang/hapus baris yang tidak berlaku, ubah nama & nilainya, atau tambah baris baru — sesuaikan dengan dashboard seller kamu sendiri.</p>
     </div>
 
-    <div class="field">
-      <label for="iklan">Persentase Budget Iklan per Produk</label>
-      <div class="amount-row"><input id="iklan" type="number" inputmode="decimal" placeholder="0" min="0" step="0.1"><span class="prefix" style="margin-left:6px;">%</span></div>
-    </div>
-
     <hr class="divider">
     <div class="calc-line"><span>Total Biaya Layanan Marketplace</span><span id="calcAdmin">Rp 0</span></div>
-    <div class="calc-line"><span>Budget Iklan</span><span id="calcIklan">Rp 0</span></div>
     <div class="calc-line"><span>HPP Awal</span><span id="calcHpp">Rp 0</span></div>
     <div class="calc-line"><span>Total Biaya</span><span id="calcTotal">Rp 0</span></div>
 
@@ -342,7 +336,7 @@
     presetRow.appendChild(btn);
   });
 
-  const COLORS = { hpp:'#8C6A4C', admin:'#C0503F', iklan:'#C08A2E', profit:'#2E7D5B' };
+  const COLORS = { hpp:'#8C6A4C', admin:'#C0503F', profit:'#2E7D5B' };
   const { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } = Recharts;
   const root = ReactDOM.createRoot($('chartRoot'));
 
@@ -380,22 +374,21 @@
     );
   }
 
-  function renderChart(hpp, biayaAdmin, iklan, netProfit, harga) {
+  function renderChart(hpp, biayaAdmin, netProfit, harga) {
     if (harga <= 0) { root.render(React.createElement(ChartView, { empty:true })); return; }
     if (netProfit >= 0) {
       const data = [
         { label:'HPP', value:hpp, color:COLORS.hpp, pct:hpp/harga*100 },
         { label:'Biaya Marketplace', value:biayaAdmin, color:COLORS.admin, pct:biayaAdmin/harga*100 },
-        { label:'Iklan', value:iklan, color:COLORS.iklan, pct:iklan/harga*100 },
         { label:'Profit Bersih', value:Math.max(netProfit,0.0001), color:COLORS.profit, pct:netProfit/harga*100 }
       ];
       root.render(React.createElement(ChartView, { data }));
     } else {
-      const totalBiaya = hpp + biayaAdmin + iklan;
+      const totalBiaya = hpp + biayaAdmin;
       const data = [
         { label:'HPP', value:hpp, color:COLORS.hpp, pct: totalBiaya>0 ? hpp/totalBiaya*100 : 0 },
         { label:'Biaya Marketplace', value:biayaAdmin, color:COLORS.admin, pct: totalBiaya>0 ? biayaAdmin/totalBiaya*100 : 0 },
-        { label:'Iklan', value:iklan, color:COLORS.iklan, pct: totalBiaya>0 ? iklan/totalBiaya*100 : 0 }
+        
       ];
       root.render(React.createElement(ChartView, { data, lossAmount:Math.abs(netProfit) }));
     }
@@ -404,8 +397,6 @@
   function calc(){
     const hpp = num($('hpp').value);
     const harga = num($('harga').value);
-    const iklanPct = num($('iklan').value);
-    const iklan = harga * (iklanPct/100);
 
     let biayaAdmin = 0;
     feeRows.forEach(row => {
@@ -415,13 +406,12 @@
       if (el) el.textContent = fmtRp(row.enabled ? rowCost : 0);
     });
 
-    const totalBiaya = hpp + biayaAdmin + iklan;
+    const totalBiaya = hpp + biayaAdmin;
     const netProfit = harga - totalBiaya;
     const margin = harga > 0 ? (netProfit / harga) * 100 : 0;
-    lastCalc = { hpp, harga, iklanPct, iklan, biayaAdmin, totalBiaya, netProfit, margin };
+    lastCalc = { hpp, harga, biayaAdmin, totalBiaya, netProfit, margin };
 
     $('calcAdmin').textContent = fmtRp(biayaAdmin);
-    $('calcIklan').textContent = fmtRp(iklan);
     $('calcHpp').textContent = fmtRp(hpp);
     $('calcTotal').textContent = fmtRp(totalBiaya);
     $('outProfit').textContent = fmtRp(netProfit);
@@ -443,10 +433,10 @@
       verdict.className = 'verdict neg';
     }
 
-    renderChart(hpp, biayaAdmin, iklan, netProfit, harga);
+    renderChart(hpp, biayaAdmin, netProfit, harga);
   }
 
-  ['hpp','harga','iklan'].forEach(id => $(id).addEventListener('input', calc));
+  ['hpp','harga'].forEach(id => $(id).addEventListener('input', calc));
 
   // =========================================================
   // SIMPAN KE DATABASE (Supabase REST / PostgREST)
@@ -454,8 +444,8 @@
   // (Supabase → Project Settings → API). Tabelnya dibuat dengan
   // hpp_kalkulasi.sql.
   // =========================================================
-  const SUPABASE_URL = 'https://tgyrrnzbmfaezlqvrdht.supabase.co';        // mis. https://abcdxyz.supabase.co
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRneXJybnpibWZhZXpscXZyZGh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA1NjYwMzAsImV4cCI6MjEwNjE0MjAzMH0.LNcwM0NTAFmKoxBwSQF8zk1VU9kD3GWafkYbvxLn-T0';       // anon / publishable key
+  const SUPABASE_URL = 'ISI_SUPABASE_URL';        // mis. https://abcdxyz.supabase.co
+  const SUPABASE_ANON_KEY = 'ISI_ANON_KEY';       // anon / publishable key
   const DB_READY = /^https:\/\/.+/.test(SUPABASE_URL) && SUPABASE_ANON_KEY.indexOf('ISI_') !== 0 && SUPABASE_ANON_KEY.length > 20;
 
   async function sb(path, opts){
@@ -505,10 +495,8 @@
       marketplace: activePreset,
       hpp: c.hpp,
       harga_jual: c.harga,
-      iklan_persen: c.iklanPct,
       rincian_biaya: feeRows.map(r => ({ name: r.name, type: r.type, value: num(r.value), enabled: r.enabled })),
       total_biaya_layanan: r2(c.biayaAdmin),
-      budget_iklan: r2(c.iklan),
       total_biaya: r2(c.totalBiaya),
       net_profit: r2(c.netProfit),
       margin_persen: r2(c.margin)
@@ -613,7 +601,6 @@
       $('nama').value = d.nama_produk || '';
       $('hpp').value = d.hpp;
       $('harga').value = d.harga_jual;
-      $('iklan').value = d.iklan_persen;
       seedRows(Array.isArray(d.rincian_biaya) ? d.rincian_biaya : []);
       activePreset = d.marketplace || null;
       document.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.textContent === activePreset));
@@ -638,7 +625,7 @@
   }
 
   function resetForm(){
-    $('nama').value = ''; $('hpp').value = ''; $('harga').value = ''; $('iklan').value = '';
+    $('nama').value = ''; $('hpp').value = ''; $('harga').value = '';
     seedRows([
       { name:'Biaya Administrasi', type:'percent', value:9 },
       { name:'Biaya Proses Pesanan', type:'flat', value:1250 },
