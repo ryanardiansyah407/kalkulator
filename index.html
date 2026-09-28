@@ -149,12 +149,49 @@
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
   .toast.err{ background:var(--red); }
 
+  /* rincian HPP */
+  .auto-toggle{ display:flex; align-items:center; gap:8px; margin-top:9px; font-family:var(--sans); font-size:12px; font-weight:600; color:var(--brown); cursor:pointer; }
+  .auto-toggle input{ width:16px; height:16px; flex:0 0 auto; accent-color:var(--green); cursor:pointer; }
+  #hpp[readonly]{ color:var(--green); }
+  .hpp-panel{ margin-top:12px; padding:14px; background:var(--paper-soft); border:1.5px solid var(--line); border-radius:14px; }
+  #hppRows{ display:flex; flex-direction:column; gap:8px; }
+  .hpp-row{ background:var(--paper); border:1.5px solid var(--line); border-radius:12px; padding:9px 10px; display:flex; flex-direction:column; gap:7px; }
+  .hpp-line{ display:flex; align-items:center; gap:7px; }
+  .hpp-cat{ flex:0 0 auto; font-family:var(--sans); font-size:11.5px; font-weight:600; color:var(--brown); background:var(--clay-soft); border:none; border-radius:7px; padding:5px 6px; cursor:pointer; }
+  .hpp-name,.hpp-qty,.hpp-price{ background:var(--paper-soft); border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; }
+  .hpp-name{ flex:1 1 auto; min-width:0; font-family:var(--sans); font-size:12.5px; font-weight:500; }
+  .hpp-qty{ width:62px; flex:0 0 auto; font-size:13px; text-align:right; }
+  .hpp-price{ flex:1 1 auto; min-width:0; font-size:13px; text-align:right; }
+  .hpp-x{ font-family:var(--mono); font-size:11px; color:var(--ink-faint); }
+  .hpp-sub{ flex:0 0 auto; min-width:78px; font-family:var(--mono); font-size:11.5px; color:var(--ink); font-weight:600; text-align:right; }
+  .hpp-panel .calc-line{ font-size:12px; }
+  .yield-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:14px; font-family:var(--sans); font-size:12px; font-weight:600; color:var(--ink-dim); }
+  .yield-row .amount-row{ width:96px; padding:7px 10px; flex:0 0 auto; }
+  .yield-row input{ text-align:right; font-size:14px; }
+  .hpp-result{ display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding:10px 12px; background:var(--green-soft); color:var(--green); border-radius:10px; font-family:var(--sans); font-size:12.5px; font-weight:600; }
+  .hpp-result span:last-child{ font-family:var(--mono); font-weight:700; font-size:14px; }
+
+  /* tabs */
+  .tabs{ width:100%; display:flex; justify-content:center; gap:8px; }
+  .tab-btn{ font-family:var(--sans); font-size:13px; font-weight:600; color:var(--brown); background:rgba(255,253,248,.55); border:none; border-radius:999px; padding:10px 20px; cursor:pointer; transition:background .15s; }
+  .tab-btn.active{ background:var(--paper); color:var(--ink); box-shadow:0 6px 16px -6px rgba(70,55,30,.3); }
+  .tabpane{ display:flex; flex-wrap:wrap; gap:22px; align-items:flex-start; justify-content:center; width:100%; }
+  .tabpane[hidden]{ display:none; }
+  .hpp-linked{ display:flex; align-items:center; gap:10px; margin-top:8px; font-family:var(--sans); font-size:11.5px; font-weight:600; color:var(--green); }
+  .hpp-linked button{ background:none; border:none; color:var(--red); font-family:var(--sans); font-size:11.5px; font-weight:700; cursor:pointer; padding:0; }
+  #tabHpp .yield-row{ margin-top:16px; }
+
   @media (max-width:380px){ .card{ padding:28px 20px 24px; } .fee-value{ width:44px; } }
 </style>
 </head>
 <body>
 
 <div class="layout">
+  <div class="tabs">
+    <button type="button" class="tab-btn active" id="tabBtnProfit">Kalkulator Profit</button>
+    <button type="button" class="tab-btn" id="tabBtnHpp">Hitung HPP</button>
+  </div>
+  <div class="tabpane" id="tabProfit">
   <div class="card receipt">
     <div class="accent-bar"></div>
     <div class="brand"><span class="glyph">🧾</span></div>
@@ -168,8 +205,10 @@
       <div class="amount-row"><input id="nama" type="text" placeholder="cth. Tempe Ungkep"></div>
     </div>
     <div class="field">
-      <label for="hpp">HPP Awal</label>
+      <label for="hpp">HPP Awal (per produk)</label>
       <div class="amount-row"><span class="prefix">Rp</span><input id="hpp" type="number" inputmode="decimal" placeholder="0" min="0"></div>
+      <button id="goHppBtn" type="button" class="add-fee-btn">🧮 Hitung dari bahan →</button>
+      <div class="hpp-linked" id="hppLinkNote" style="display:none;"><span>Terhubung ke tab Hitung HPP</span><button type="button" id="unlinkHppBtn">Lepas</button></div>
     </div>
     <div class="field">
       <label for="harga">Rencana Harga Jual</label>
@@ -216,6 +255,33 @@
       <div class="amount-row"><input id="cari" type="text" placeholder="Cari nama produk…"></div>
     </div>
     <div id="savedList"><p class="saved-empty">Memuat…</p></div>
+  </div>
+  </div>
+
+  <div class="tabpane" id="tabHpp" hidden>
+    <div class="card receipt">
+      <div class="accent-bar"></div>
+      <div class="brand"><span class="glyph">🧮</span></div>
+      <h1>Hitung HPP</h1>
+      <p class="sub">bahan pokok, kemasan, tenaga kerja, dll.</p>
+
+      <div id="hppRows"></div>
+      <button id="addHppBtn" type="button" class="add-fee-btn">+ Tambah komponen</button>
+      <div class="yield-row">
+        <span>Hasil produksi (jumlah produk per batch)</span>
+        <div class="amount-row"><input id="yieldQty" type="number" inputmode="decimal" min="0" step="any" value="1"></div>
+      </div>
+
+      <hr class="divider">
+      <div id="hppByCat"></div>
+      <div class="calc-line"><span>Total biaya 1 batch</span><span id="hppTotalBatch">Rp 0</span></div>
+      <div class="hpp-result"><span>HPP per produk</span><span id="hppPerUnit">Rp 0</span></div>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary" id="useHppBtn">Pakai di Kalkulator Profit</button>
+      </div>
+      <p class="preset-note">Isi jumlah pakai × harga satuan tiap komponen. Total dibagi hasil produksi = HPP per produk. Tulis satuan di nama komponen, mis. "Kedelai (kg)".</p>
+    </div>
   </div>
 </div>
 
@@ -439,6 +505,105 @@
   ['hpp','harga'].forEach(id => $(id).addEventListener('input', calc));
 
   // =========================================================
+  // RINCIAN HPP (bahan pokok, pendukung, kemasan, tenaga kerja, dll.)
+  // =========================================================
+  const HPP_CATS = ['Bahan Pokok','Bahan Pendukung','Kemasan','Tenaga Kerja','Overhead','Lainnya'];
+  let hppRows = [];
+  let hppAuto = false;
+  let lastHppPerUnit = 0;
+  function seedHppRows(list){ hppRows = list.map(r => ({ id: nextId++, cat:'Bahan Pokok', name:'', qty:1, price:'', ...r })); }
+  seedHppRows([{}]);
+
+  function mk(tag, cls, props){ const el = document.createElement(tag); if (cls) el.className = cls; return Object.assign(el, props || {}); }
+
+  function renderHppRows(){
+    const box = $('hppRows');
+    box.innerHTML = '';
+    hppRows.forEach(row => {
+      const wrap = mk('div', 'hpp-row');
+
+      const l1 = mk('div', 'hpp-line');
+      const sel = mk('select', 'hpp-cat');
+      HPP_CATS.forEach(c => sel.appendChild(mk('option', '', { value:c, textContent:c, selected:c === row.cat })));
+      sel.addEventListener('change', () => { row.cat = sel.value; updateHpp(); });
+      const nm = mk('input', 'hpp-name', { type:'text', placeholder:'cth. Kedelai (kg)', value:row.name });
+      nm.addEventListener('input', () => { row.name = nm.value; });
+      const rm = mk('button', 'fee-remove', { type:'button', innerHTML:'&times;' });
+      rm.addEventListener('click', () => { hppRows = hppRows.filter(r => r.id !== row.id); renderHppRows(); updateHpp(); });
+      l1.append(sel, nm, rm);
+
+      const l2 = mk('div', 'hpp-line');
+      const qty = mk('input', 'hpp-qty', { type:'number', placeholder:'Jml', min:0, step:'any', value:row.qty });
+      qty.addEventListener('input', () => { row.qty = qty.value; updateHpp(); });
+      const price = mk('input', 'hpp-price', { type:'number', placeholder:'Harga satuan (Rp)', min:0, step:'any', value:row.price });
+      price.addEventListener('input', () => { row.price = price.value; updateHpp(); });
+      const sub = mk('span', 'hpp-sub', { textContent:'Rp 0' });
+      sub.dataset.sub = row.id;
+      l2.append(qty, mk('span', 'hpp-x', { textContent:'×' }), price, mk('span', 'hpp-x', { textContent:'=' }), sub);
+
+      wrap.append(l1, l2);
+      box.appendChild(wrap);
+    });
+  }
+
+  function updateHpp(){
+    let total = 0;
+    const byCat = {};
+    hppRows.forEach(r => {
+      const s = num(r.qty) * num(r.price);
+      total += s;
+      byCat[r.cat] = (byCat[r.cat] || 0) + s;
+      const el = document.querySelector('[data-sub="' + r.id + '"]');
+      if (el) el.textContent = fmtRp(s);
+    });
+    const y = num($('yieldQty').value);
+    const perUnit = total / (y > 0 ? y : 1);
+    lastHppPerUnit = perUnit;
+
+    $('hppTotalBatch').textContent = fmtRp(total);
+    $('hppPerUnit').textContent = fmtRp(perUnit);
+    const catBox = $('hppByCat');
+    catBox.innerHTML = '';
+    HPP_CATS.forEach(c => {
+      if (byCat[c] > 0) {
+        const d = mk('div', 'calc-line');
+        d.append(mk('span', '', { textContent:c }), mk('span', '', { textContent:fmtRp(byCat[c]) }));
+        catBox.appendChild(d);
+      }
+    });
+
+    if (hppAuto) $('hpp').value = perUnit > 0 ? Math.round(perUnit * 100) / 100 : '';
+    calc();
+  }
+
+  function applyHppMode(){
+    $('hpp').readOnly = hppAuto;
+    $('hppLinkNote').style.display = hppAuto ? 'flex' : 'none';
+    $('goHppBtn').textContent = hppAuto ? '🧮 Edit rincian HPP →' : '🧮 Hitung dari bahan →';
+    updateHpp();
+  }
+
+  function showTab(name){
+    const isHpp = name === 'hpp';
+    $('tabProfit').hidden = isHpp;
+    $('tabHpp').hidden = !isHpp;
+    $('tabBtnProfit').classList.toggle('active', !isHpp);
+    $('tabBtnHpp').classList.toggle('active', isHpp);
+    window.scrollTo({ top: 0 });
+  }
+  $('tabBtnProfit').addEventListener('click', () => showTab('profit'));
+  $('tabBtnHpp').addEventListener('click', () => showTab('hpp'));
+  $('goHppBtn').addEventListener('click', () => showTab('hpp'));
+  $('unlinkHppBtn').addEventListener('click', () => { hppAuto = false; applyHppMode(); });
+  $('useHppBtn').addEventListener('click', () => {
+    if (!(lastHppPerUnit > 0)) return toast('Isi komponen dan harganya dulu.', true);
+    hppAuto = true; applyHppMode(); showTab('profit');
+    toast('HPP per produk dipakai di kalkulator profit.');
+  });
+  $('yieldQty').addEventListener('input', updateHpp);
+  $('addHppBtn').addEventListener('click', () => { hppRows.push({ id: nextId++, cat:'Bahan Pokok', name:'', qty:1, price:'' }); renderHppRows(); updateHpp(); });
+
+  // =========================================================
   // SIMPAN KE DATABASE (Supabase REST / PostgREST)
   // Isi 2 baris di bawah dengan data project Supabase kalkulator ini
   // (Supabase → Project Settings → API). Tabelnya dibuat dengan
@@ -496,6 +661,10 @@
       hpp: c.hpp,
       harga_jual: c.harga,
       rincian_biaya: feeRows.map(r => ({ name: r.name, type: r.type, value: num(r.value), enabled: r.enabled })),
+      rincian_hpp: hppAuto ? {
+        hasil_produksi: num($('yieldQty').value) > 0 ? num($('yieldQty').value) : 1,
+        rows: hppRows.map(r => ({ cat: r.cat, name: r.name, qty: num(r.qty), price: num(r.price) }))
+      } : null,
       total_biaya_layanan: r2(c.biayaAdmin),
       total_biaya: r2(c.totalBiaya),
       net_profit: r2(c.netProfit),
@@ -522,7 +691,7 @@
       }
       loadList();
     } catch (e) {
-      toast(e.message || 'Gagal menyimpan.', true);
+      toast(/rincian_hpp/.test(e.message || '') ? 'Kolom rincian_hpp belum ada di database. Jalankan SQL migrasi dulu.' : (e.message || 'Gagal menyimpan.'), true);
     } finally {
       btns.forEach(b => b.disabled = false);
     }
@@ -602,6 +771,10 @@
       $('hpp').value = d.hpp;
       $('harga').value = d.harga_jual;
       seedRows(Array.isArray(d.rincian_biaya) ? d.rincian_biaya : []);
+      const dh = d.rincian_hpp;
+      if (dh && Array.isArray(dh.rows)) { seedHppRows(dh.rows); $('yieldQty').value = dh.hasil_produksi || 1; hppAuto = true; }
+      else { seedHppRows([{}]); $('yieldQty').value = 1; hppAuto = false; }
+      renderHppRows(); applyHppMode();
       activePreset = d.marketplace || null;
       document.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.textContent === activePreset));
       renderFeeRows(); calc();
@@ -633,6 +806,8 @@
       { name:'Biaya Promo Extra', type:'percent', value:4.5 },
       { name:'Biaya Promosi', type:'percent', value:1.11 }
     ]);
+    seedHppRows([{}]); $('yieldQty').value = 1; hppAuto = false;
+    renderHppRows(); applyHppMode();
     clearPresetActive();
     renderFeeRows(); calc();
     setEditing(null);
@@ -652,6 +827,8 @@
     $('saveBtn').disabled = true;
   }
 
+  renderHppRows();
+  applyHppMode();
   renderFeeRows();
   calc();
   loadList();
